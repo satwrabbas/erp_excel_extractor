@@ -1,0 +1,21 @@
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml"
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "venv/**",
+      "__pycache__/**",
+      "*.pyc",
+      "repomix-output.xml",
+      "input_files/**",
+      "output_files/**"
+    ]
+  },
+  "_comment_for_developer": "--- كيف تضيف المدخلات والمخرجات إذا احتجت لها؟ ---",
+  "_comment_step_1": "لحفظ المدخلات والمخرجات داخل ملف repomix، قم بحذف السطرين التاليين من مصفوفة customPatterns الموجودة بالأعلى:",
+  "_comment_step_2": "1. input_files/**",
+  "_comment_step_3": "2. output_files/**"
+}

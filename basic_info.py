@@ -1,4 +1,4 @@
-from helpers import get_adjacent_number, get_largest_in_first_half, clean_client_name
+from helpers import get_adjacent_number, clean_client_name, to_float
 
 def extract_basic_info(rows, file_name):
     info = {
@@ -43,12 +43,6 @@ def extract_basic_info(rows, file_name):
             
             if "سعر المتر المربع" in text and info['base_price'] == 0:
                 info['base_price'] = get_adjacent_number(row, c_idx)
-
-            if text in ["دفعة أولى", "الدفعة المقدمة"] and info['down_payment'] == 0:
-                info['down_payment'] = get_adjacent_number(row, c_idx)
-                
-            if text == "القسط 1" and info['monthly_installment'] == 0:
-                info['monthly_installment'] = get_adjacent_number(row, c_idx)
 
     if info['client_name'] == 'غير محدد' or info['client_name'] == 'رقم الفريق الثاني':
         info['client_name'] = clean_client_name(file_name)

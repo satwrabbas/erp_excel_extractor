@@ -1,0 +1,363 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: venv/**, __pycache__/**, *.pyc, repomix-output.xml, input_files/**, output_files/**
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+basic_info.py
+coefficients.py
+helpers.py
+main.py
+payments.py
+repomix.config.json
+requirements.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="repomix.config.json">
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml"
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      "venv/**",
+      "__pycache__/**",
+      "*.pyc",
+      "repomix-output.xml",
+      "input_files/**",
+      "output_files/**"
+    ]
+  },
+  "_comment_for_developer": "--- كيف تضيف المدخلات والمخرجات إذا احتجت لها؟ ---",
+  "_comment_step_1": "لحفظ المدخلات والمخرجات داخل ملف repomix، قم بحذف السطرين التاليين من مصفوفة customPatterns الموجودة بالأعلى:",
+  "_comment_step_2": "1. input_files/**",
+  "_comment_step_3": "2. output_files/**"
+}
+</file>
+
+<file path=".gitignore">
+# تجاهل مجلد البيئة الوهمية
+venv/
+
+# تجاهل مجلدات البيانات (المدخلات والمخرجات)
+input_files/
+output_files/
+
+# تجاهل ملفات الكاش الخاصة ببايثون (مهم جداً)
+__pycache__/
+</file>
+
+<file path="basic_info.py">
+from helpers import get_adjacent_number, clean_client_name, to_float
+
+def extract_basic_info(rows, file_name):
+    info = {
+        'contract_type': 'متخصص',
+        'client_name': 'غير محدد',
+        'guarantor': 'بدون كفيل',
+        'area': 0.0,
+        'base_price': 0.0,
+        'down_payment': 0.0,
+        'monthly_installment': 0.0,
+        'is_finalized': False
+    }
+
+    for r_idx, row in enumerate(rows):
+        for c_idx, cell in enumerate(row):
+            if not isinstance(cell, str):
+                continue
+            text = cell.strip()
+
+            if "لاحق" in text:
+                info['contract_type'] = 'لاحق التخصص'
+            if "تصفية" in text or "مستلم نهائي" in text:
+                info['is_finalized'] = True
+                info['contract_type'] = 'مستلم'
+
+            if text == "المالك" or "اسم الفريق الثاني" in text:
+                if r_idx + 1 < len(rows):
+                    for val in rows[r_idx + 1][c_idx:]:
+                        if isinstance(val, str) and len(val.strip()) > 3:
+                            info['client_name'] = val.strip()
+                            break
+
+            if text == "الكفيل":
+                if r_idx + 1 < len(rows):
+                    for val in rows[r_idx + 1][c_idx:]:
+                        if isinstance(val, str) and len(val.strip()) > 3:
+                            info['guarantor'] = val.strip()
+                            break
+
+            if "مساحة الشقة" in text and info['area'] == 0:
+                info['area'] = get_adjacent_number(row, c_idx)
+            
+            if "سعر المتر المربع" in text and info['base_price'] == 0:
+                info['base_price'] = get_adjacent_number(row, c_idx)
+
+    if info['client_name'] == 'غير محدد' or info['client_name'] == 'رقم الفريق الثاني':
+        info['client_name'] = clean_client_name(file_name)
+
+    return info
+</file>
+
+<file path="coefficients.py">
+from helpers import get_adjacent_number
+
+def extract_coefficients(rows):
+    coeffs = {}
+    keywords = ["الطابق", "الشارع", "المصعد", "الوجيبة", "الاتجاه"]
+    
+    for row in rows:
+        for c_idx, cell in enumerate(row):
+            if not isinstance(cell, str):
+                continue
+            text = cell.strip()
+            for key in keywords:
+                if key in text and key not in coeffs:
+                    val = get_adjacent_number(row, c_idx)
+                    if val != 0:
+                        coeffs[key] = val
+    return coeffs
+</file>
+
+<file path="helpers.py">
+import re
+import datetime
+
+def to_float(val):
+    """تحويل آمن لأي قيمة إلى رقم عشري لتجنب انهيار الكود أو قراءة نصوص"""
+    if val is None: return 0.0
+    if isinstance(val, (int, float)): return float(val)
+    if isinstance(val, str):
+        clean_str = val.replace(',', '').replace(' ', '').strip()
+        try:
+            return float(clean_str)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+def get_adjacent_number(row, start_idx):
+    for cell in row[start_idx+1:]:
+        val = to_float(cell)
+        if val > 0:
+            return val
+    return 0.0
+
+def get_largest_in_first_half(row):
+    first_half = row[:8]
+    numbers = [to_float(cell) for cell in first_half if cell is not None and to_float(cell) > 0]
+    return max(numbers) if numbers else 0.0
+
+def clean_client_name(filename):
+    name = filename.replace('.xlsx', '').replace('.xlsm', '')
+    for word in ['متخصص', 'لاحق', 'تخصص', 'مستلم', 'نهائي', 'شقة', 'ملحق', 'ثالث', 'فني', 'رابع']:
+        name = name.replace(word, '')
+    name = re.sub(r'\d+', '', name)
+    return name.strip("- _")
+
+def parse_single_date(cell):
+    if isinstance(cell, datetime.datetime):
+        return cell.strftime("%Y-%m-%d")
+    if isinstance(cell, str):
+        text = cell.strip()
+        match = re.search(r'(\d{1,4})[\\/\-](\d{1,2})[\\/\-](\d{1,4})', text)
+        if match:
+            parts = re.split(r'[\\/\-]', match.group())
+            if len(parts[0]) == 4:
+                return f"{parts[0]}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+            elif len(parts[2]) == 4:
+                return f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+    return None
+
+def extract_date_from_row(row):
+    for cell in row[:8]:
+        date = parse_single_date(cell)
+        if date: return date
+    return None
+</file>
+
+<file path="main.py">
+import os
+import json
+import openpyxl
+
+from basic_info import extract_basic_info
+from coefficients import extract_coefficients
+from payments import extract_payments
+
+INPUT_FOLDER = 'input_files'
+OUTPUT_FILE = 'output_files/erp_data.json'
+
+def process_excel_files():
+    if not os.path.exists(INPUT_FOLDER):
+        os.makedirs(INPUT_FOLDER)
+    if not os.path.exists(os.path.dirname(OUTPUT_FILE)):
+        os.makedirs(os.path.dirname(OUTPUT_FILE))
+
+    excel_files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith(('.xlsx', '.xlsm')) and not f.startswith('~$')]
+    print(f"🔍 تم العثور على {len(excel_files)} ملفات. جاري التحليل المتقدم...\n")
+    
+    all_contracts_data = []
+
+    for file_name in excel_files:
+        file_path = os.path.join(INPUT_FOLDER, file_name)
+        try:
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            sheet = wb.active
+            rows = list(sheet.iter_rows(values_only=True))
+
+            basic_info = extract_basic_info(rows, file_name)
+            coefficients = extract_coefficients(rows)
+            payment_history = extract_payments(rows)
+
+            # 🌟 الربط الذكي: نأخذ قيم الدفعة الأولى والقسط الشهري من السجل لضمان التطابق
+            for p in payment_history:
+                if p['payment_name'] == "دفعة أولى" and basic_info['down_payment'] == 0:
+                    basic_info['down_payment'] = p['amount_paid']
+                if p['payment_name'] == "القسط 1" and basic_info['monthly_installment'] == 0:
+                    basic_info['monthly_installment'] = p['amount_paid']
+
+            contract_data = {
+                "file_name": file_name,
+                "basic_info": basic_info,
+                "coefficients": coefficients,
+                "payment_history": payment_history
+            }
+
+            all_contracts_data.append(contract_data)
+            print(f"✅ تم سحب: {basic_info['client_name']} ({len(payment_history)} دفعات سليمة)")
+
+        except Exception as e:
+            print(f"❌ فشل معالجة الملف {file_name}: {e}")
+
+    if all_contracts_data:
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as json_file:
+            json.dump(all_contracts_data, json_file, ensure_ascii=False, indent=4)
+        print(f"\n🎉 تم حفظ البيانات النهائية والمطابقة 100% في: {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    process_excel_files()
+</file>
+
+<file path="payments.py">
+from helpers import get_largest_in_first_half, extract_date_from_row, parse_single_date, to_float
+
+def extract_payments(rows):
+    payments = []
+    
+    amount_col = -1
+    price_col = -1
+    date_col = -1
+    
+    # 1. البحث عن الأعمدة الصحيحة (في أول 8 أعمدة فقط لتجنب جدول المعاملات الأيسر)
+    for row in rows[:20]: 
+        for c_idx, cell in enumerate(row[:8]):
+            if isinstance(cell, str):
+                text = cell.strip()
+                # تثبيت العمود فقط في حال لم نجده بعد
+                if amount_col == -1 and ("قيمة القسط" in text or "المبلغ" in text):
+                    amount_col = c_idx
+                elif price_col == -1 and ("سعر المتر" in text):
+                    price_col = c_idx
+                elif date_col == -1 and ("تاريخ القسط" in text or text == "التاريخ" or text == "تاريخ الدفع"):
+                    date_col = c_idx
+
+    # 2. سحب البيانات بدقة جراحية
+    for row in rows:
+        for c_idx, cell in enumerate(row[:5]):
+            if isinstance(cell, str):
+                text = cell.strip()
+                if text.startswith("القسط") or text == "دفعة أولى" or text.startswith("ايصال"):
+                    
+                    payment_name = text
+                    amount = 0.0
+                    meter_price = 0.0
+                    date = None
+
+                    # أخذ المبلغ بدقة من العمود
+                    if amount_col != -1 and amount_col < len(row):
+                        amount = to_float(row[amount_col])
+                    else:
+                        amount = get_largest_in_first_half(row)
+                        
+                    # أخذ سعر المتر بدقة من العمود
+                    if price_col != -1 and price_col < len(row):
+                        meter_price = to_float(row[price_col])
+                    else:
+                        nums = [to_float(c) for c in row[:8] if c is not None and to_float(c) > 0]
+                        if amount in nums: nums.remove(amount)
+                        if nums: meter_price = max(nums)
+
+                    # أخذ التاريخ
+                    if date_col != -1 and date_col < len(row):
+                        date = parse_single_date(row[date_col])
+                    if not date:
+                        date = extract_date_from_row(row)
+
+                    # 🚫 الفلترة الحاسمة: إذا كان المبلغ صفر، فهذا يعني أن القسط فارغ في الإكسل (وهمي) ولن نضيفه!
+                    if amount > 100: 
+                        payments.append({
+                            "payment_name": payment_name,
+                            "amount_paid": amount,
+                            "meter_price_at_payment": meter_price, 
+                            "payment_date": date if date else "2020-01-01"
+                        })
+                    break 
+                
+    return payments
+</file>
+
+<file path="requirements.txt">
+et_xmlfile==2.0.0
+numpy==2.5.1
+openpyxl==3.1.5
+pandas==3.0.3
+python-dateutil==2.9.0.post0
+six==1.17.0
+tzdata==2026.3
+</file>
+
+</files>
